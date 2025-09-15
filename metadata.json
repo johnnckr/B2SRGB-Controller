@@ -1,0 +1,7 @@
+{
+  "name": "B2SRGB Controller",
+  "description": "A web-based mobile application to control an ESP32-powered RGB LED strip. Features music synchronization, multiple lighting modes, and fine-tuned adjustments for color, brightness, and speed.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
