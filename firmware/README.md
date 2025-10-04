@@ -9,6 +9,13 @@
 - [API Commands](#api-commands)
 - [การทำงาน](#การทำงาน)
 
+## 📚 คู่มือเพิ่มเติม
+
+- **[🔌 WIRING_GUIDE.md](WIRING_GUIDE.md)** - คู่มือการเชื่อมสาย LED Strip แบบละเอียด
+- **[📤 UPLOAD_GUIDE.md](UPLOAD_GUIDE.md)** - คู่มือการอัปโหลด Firmware ทีละขั้นตอน
+- **[🔧 TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - แก้ปัญหาทุกอาการที่เจอบ่อย
+- **[🎨 CUSTOMIZATION.md](CUSTOMIZATION.md)** - ปรับแต่ง Code และเพิ่มฟีเจอร์ใหม่
+
 ## 🌟 คุณสมบัติ
 
 ### 🔌 การเชื่อมต่อ
