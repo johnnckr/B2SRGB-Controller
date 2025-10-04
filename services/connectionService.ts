@@ -144,15 +144,20 @@ class ConnectionServiceManager implements IConnectionService {
             case ConnectionType.WiFi:
                 try {
                     console.log(`[WiFi SEND to ${this.wifiIp}]`, commandString);
+                    // ใช้ HTTP API endpoints ใหม่ที่รองรับ iOS
                     const response = await fetch(`http://${this.wifiIp}/command`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
                         body: commandString,
-                        mode: 'no-cors', // ป้องกัน CORS error
                     });
-                    console.log('[WiFi] Command sent successfully');
+                    
+                    if (response.ok) {
+                        console.log('[WiFi] Command sent successfully');
+                    } else {
+                        console.warn('[WiFi] Server responded with status:', response.status);
+                    }
                 } catch (error) {
                     console.error('[WiFi] Failed to send command:', error);
                 }
@@ -201,13 +206,13 @@ class ConnectionServiceManager implements IConnectionService {
     }
 
     setBrightness = (brightness: number) => {
-        const value = Math.round((brightness / 100) * 255);
-        this.sendCommand({ type: 'BRIGHTNESS', value });
+        // Firmware รับค่า 0-100 โดยตรง (จะแปลงเป็น 0-255 ภายใน)
+        this.sendCommand({ type: 'BRIGHTNESS', value: brightness });
     }
 
     setSpeed = (speed: number) => {
-        const value = 100 - speed;
-        this.sendCommand({ type: 'SPEED', value });
+        // Firmware รับค่า 0-100 โดยตรง (100 = เร็วสุด, 0 = ช้าสุด)
+        this.sendCommand({ type: 'SPEED', value: speed });
     }
 
     triggerMusicBeat = (color: {r: number, g: number, b: number}, brightness: number) => {
