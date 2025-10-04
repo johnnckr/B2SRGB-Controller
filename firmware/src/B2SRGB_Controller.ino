@@ -55,6 +55,10 @@ char saved_ssid[32] = "";
 char saved_password[64] = "";
 char device_name[32] = "B2SRGB"; // ชื่ออุปกรณ์ (จะถูกสร้างอัตโนมัติครั้งแรก)
 
+// Reset Button (BOOT button on ESP32)
+#define RESET_BUTTON 0  // GPIO 0 = BOOT button
+unsigned long resetButtonPressTime = 0;
+
 // Mode and Pattern Variables
 String currentMode = "สีเดียว";
 String currentPattern = "รุ้งวนลูป";
@@ -398,10 +402,50 @@ void loadDeviceName() {
 }
 
 //================================================================
+// RESET WiFi FUNCTION (กดปุ่ม BOOT ค้าง 5 วินาทีเพื่อลบ WiFi)
+//================================================================
+void checkResetButton() {
+  if (digitalRead(RESET_BUTTON) == LOW) {
+    if (resetButtonPressTime == 0) {
+      resetButtonPressTime = millis();
+      Serial.println("BOOT button pressed - Hold 5 seconds to reset WiFi...");
+    } else if (millis() - resetButtonPressTime > 5000) {
+      Serial.println("\n🔄 Resetting WiFi credentials...");
+      
+      // ลบข้อมูล WiFi ที่บันทึกไว้
+      nvs_open("storage", NVS_READWRITE, &my_handle);
+      nvs_erase_key(my_handle, "ssid");
+      nvs_erase_key(my_handle, "password");
+      nvs_commit(my_handle);
+      nvs_close(my_handle);
+      
+      // แสดงสัญญาณว่าลบสำเร็จ (กระพริบไฟแดง 3 ครั้ง)
+      for(int i = 0; i < 3; i++) {
+        fill_solid(leds, min(20, NUM_LEDS), CRGB::Red);
+        FastLED.show();
+        delay(200);
+        FastLED.clear();
+        FastLED.show();
+        delay(200);
+      }
+      
+      Serial.println("✅ WiFi reset complete! Restarting...");
+      delay(1000);
+      ESP.restart();
+    }
+  } else {
+    resetButtonPressTime = 0;
+  }
+}
+
+//================================================================
 // SETUP FUNCTION
 //================================================================
 void setup() {
   Serial.begin(115200);
+  
+  // Setup Reset Button
+  pinMode(RESET_BUTTON, INPUT_PULLUP);
   
   // Initialize LEDs
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
@@ -514,69 +558,172 @@ void setup() {
       server.on("/", HTTP_GET, [](){
         String html = R"rawliteral(
 <!DOCTYPE HTML>
-<html>
+<html lang="th">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>B2SRGB Control Panel</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: Arial; margin: 0; padding: 20px; background: #1a1a1a; color: #fff; }
-    h1 { color: #03DAC6; text-align: center; }
-    .container { max-width: 600px; margin: 0 auto; }
-    .card { background: #2a2a2a; border-radius: 10px; padding: 20px; margin: 15px 0; }
-    button { width: 100%; padding: 15px; margin: 5px 0; border: none; border-radius: 5px; 
-             font-size: 16px; cursor: pointer; background: #03DAC6; color: #000; font-weight: bold; }
-    button:hover { background: #00bfa5; }
-    button.off { background: #555; color: #fff; }
-    input[type="range"] { width: 100%; }
-    .color-picker { display: flex; gap: 10px; align-items: center; }
-    input[type="color"] { width: 60px; height: 60px; border: none; border-radius: 5px; cursor: pointer; }
-    .status { text-align: center; padding: 10px; background: #333; border-radius: 5px; margin: 10px 0; }
+    * { box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; 
+      margin: 0; 
+      padding: 15px; 
+      background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); 
+      color: #fff;
+      min-height: 100vh;
+    }
+    h1 { 
+      color: #03DAC6; 
+      text-align: center; 
+      margin: 10px 0 20px 0;
+      font-size: 28px;
+      text-shadow: 0 0 10px rgba(3, 218, 198, 0.5);
+    }
+    h3 { 
+      margin: 0 0 15px 0; 
+      font-size: 18px;
+      color: #03DAC6;
+    }
+    .container { 
+      max-width: 500px; 
+      margin: 0 auto; 
+    }
+    .card { 
+      background: rgba(42, 42, 42, 0.9); 
+      border-radius: 15px; 
+      padding: 20px; 
+      margin: 15px 0;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+    }
+    button { 
+      width: 100%; 
+      padding: 14px; 
+      margin: 6px 0; 
+      border: none; 
+      border-radius: 10px; 
+      font-size: 16px; 
+      cursor: pointer; 
+      background: linear-gradient(135deg, #03DAC6 0%, #00bfa5 100%); 
+      color: #000; 
+      font-weight: bold;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(3, 218, 198, 0.3);
+    }
+    button:active { 
+      transform: scale(0.98);
+      box-shadow: 0 1px 4px rgba(3, 218, 198, 0.5);
+    }
+    button.off { 
+      background: linear-gradient(135deg, #555 0%, #444 100%); 
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    input[type="range"] { 
+      width: 100%; 
+      height: 8px;
+      border-radius: 5px;
+      background: #444;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #03DAC6;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(3, 218, 198, 0.5);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #03DAC6;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 10px rgba(3, 218, 198, 0.5);
+    }
+    .color-picker { 
+      display: flex; 
+      gap: 10px; 
+      align-items: center; 
+    }
+    input[type="color"] { 
+      width: 70px; 
+      height: 70px; 
+      border: 3px solid #03DAC6; 
+      border-radius: 10px; 
+      cursor: pointer;
+      background: transparent;
+    }
+    .color-picker button {
+      flex: 1;
+    }
+    .status { 
+      text-align: center; 
+      padding: 12px; 
+      background: rgba(3, 218, 198, 0.2); 
+      border-radius: 10px; 
+      margin: 10px 0;
+      font-size: 14px;
+      border: 1px solid rgba(3, 218, 198, 0.3);
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>🎨 B2SRGB Control</h1>
-    <div class="status" id="status">กำลังโหลด...</div>
+    <div class="status" id="status">⏳ กำลังโหลด...</div>
     
     <div class="card">
       <h3>⚡ เปิด/ปิด</h3>
-      <button id="powerBtn" onclick="togglePower()">กำลังโหลด...</button>
+      <button id="powerBtn" onclick="togglePower()">⏳ กำลังโหลด...</button>
     </div>
     
     <div class="card">
       <h3>🎭 โหมด</h3>
-      <button onclick="setMode('สีเดียว')">สีเดียว</button>
-      <button onclick="setMode('เปลี่ยนสี')">เปลี่ยนสี</button>
-      <button onclick="setMode('กระพริบ')">กระพริบ</button>
-      <button onclick="setMode('เอฟเฟกต์')">เอฟเฟกต์</button>
-      <button onclick="setMode('ตามเพลง')">ตามเพลง</button>
+      <button onclick="setMode('สีเดียว')">🎨 สีเดียว</button>
+      <button onclick="setMode('เปลี่ยนสี')">🌈 เปลี่ยนสี</button>
+      <button onclick="setMode('กระพริบ')">⚡ กระพริบ</button>
+      <button onclick="setMode('เอฟเฟกต์')">✨ เอฟเฟกต์</button>
+      <button onclick="setMode('ตามเพลง')">🎵 ตามเพลง</button>
     </div>
     
     <div class="card">
       <h3>✨ เอฟเฟกต์</h3>
-      <button onclick="setPattern('รุ้งวนลูป')">รุ้งวนลูป</button>
-      <button onclick="setPattern('รุ้งวิ่งไล่')">รุ้งวิ่งไล่</button>
-      <button onclick="setPattern('เปลวไฟ')">เปลวไฟ</button>
-      <button onclick="setPattern('คลื่นทะเล')">คลื่นทะเล</button>
-      <button onclick="setPattern('ประกาย')">ประกาย</button>
+      <button onclick="setPattern('รุ้งวนลูป')">🌈 รุ้งวนลูป</button>
+      <button onclick="setPattern('รุ้งวิ่งไล่')">🏃 รุ้งวิ่งไล่</button>
+      <button onclick="setPattern('เปลวไฟ')">🔥 เปลวไฟ</button>
+      <button onclick="setPattern('คลื่นทะเล')">🌊 คลื่นทะเล</button>
+      <button onclick="setPattern('ประกาย')">⭐ ประกาย</button>
     </div>
     
     <div class="card">
-      <h3>🎨 สี</h3>
+      <h3>🎨 เลือกสี</h3>
       <div class="color-picker">
-        <input type="color" id="colorPicker" value="#ffffff">
-        <button onclick="setColor()">ตั้งค่าสี</button>
+        <input type="color" id="colorPicker" value="#ffffff" title="เลือกสี">
+        <button onclick="setColor()">✓ ตั้งค่า</button>
       </div>
     </div>
     
     <div class="card">
       <h3>💡 ความสว่าง: <span id="brightnessValue">50</span>%</h3>
-      <input type="range" id="brightness" min="0" max="100" value="50" oninput="setBrightness(this.value)">
+      <input type="range" id="brightness" min="0" max="100" value="50" 
+             oninput="setBrightness(this.value)" 
+             ontouchstart="this.focus()" 
+             ontouchend="this.blur()">
     </div>
     
     <div class="card">
       <h3>⚡ ความเร็ว: <span id="speedValue">50</span></h3>
-      <input type="range" id="speed" min="0" max="100" value="50" oninput="setSpeed(this.value)">
+      <input type="range" id="speed" min="0" max="100" value="50" 
+             oninput="setSpeed(this.value)"
+             ontouchstart="this.focus()" 
+             ontouchend="this.blur()">
     </div>
   </div>
   
@@ -591,11 +738,15 @@ void setup() {
           document.getElementById('powerBtn').textContent = powerState ? '🟢 เปิด' : '🔴 ปิด';
           document.getElementById('powerBtn').className = powerState ? '' : 'off';
           document.getElementById('status').textContent = 
-            `📱 ${data.deviceName} | โหมด: ${data.mode} | ${powerState ? 'เปิด' : 'ปิด'}`;
+            `📱 ${data.deviceName} | 🎭 ${data.mode} | ${powerState ? '🟢 เปิด' : '🔴 ปิด'}`;
           document.getElementById('brightness').value = data.brightness;
           document.getElementById('brightnessValue').textContent = data.brightness;
           document.getElementById('speed').value = data.speed;
           document.getElementById('speedValue').textContent = data.speed;
+        })
+        .catch(err => {
+          document.getElementById('status').textContent = '❌ ไม่สามารถเชื่อมต่อ ESP32';
+          console.error('Status fetch error:', err);
         });
     }
     
@@ -843,6 +994,9 @@ void updateAnimation() {
 // LOOP FUNCTION
 //================================================================
 void loop() {
+  // ตรวจสอบปุ่ม BOOT สำหรับรีเซ็ต WiFi (ทำงานทั้งสองโหมด)
+  checkResetButton();
+  
   if (strlen(saved_ssid) > 0) {
     // Normal Mode Loop
     server.handleClient();
