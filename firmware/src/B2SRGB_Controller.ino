@@ -24,6 +24,7 @@
 #include <BLEServer.h>
 #include "nvs_flash.h" // <--- ไลบรารีสำหรับบันทึกข้อมูล Wi-Fi
 #include "nvs.h"
+#include "wifi_scanner.h" // <--- WiFi Scanner Feature
 
 //================================================================
 // HARDWARE & WIFI CONFIGURATION
@@ -321,28 +322,7 @@ void parseAndExecuteCommand(String json) {
 //================================================================
 // หน้า HTML สำหรับการตั้งค่า (จะถูกส่งไปให้เบราว์เซอร์)
 void handleRoot() {
-  String html = R"rawliteral(
-<!DOCTYPE HTML><html><head>
-<title>B2SRGB Wi-Fi Setup</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-  body{font-family: Arial, sans-serif; background-color: #121212; color: #E0E0E0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;}
-  .container{background-color: #1E1E1E; padding: 25px; border-radius: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.5); width: 90%; max-width: 400px;}
-  h2{color: #03DAC6; text-align: center;}
-  input{width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #333; background-color: #2C2C2C; color: #E0E0E0; box-sizing: border-box;}
-  button{width: 100%; padding: 12px; border-radius: 5px; border: none; background-color: #03DAC6; color: #121212; font-weight: bold; font-size: 16px; cursor: pointer;}
-</style>
-</head><body>
-<div class="container">
-  <h2>ตั้งค่า Wi-Fi สำหรับ B2SRGB</h2>
-  <form action="/save-wifi" method="POST">
-    <input type="text" name="ssid" placeholder="ชื่อ Wi-Fi (SSID)" required><br>
-    <input type="password" name="pass" placeholder="รหัสผ่าน"><br>
-    <button type="submit">บันทึกและเชื่อมต่อ</button>
-  </form>
-</div>
-</body></html>)rawliteral";
-  server.send(200, "text/html", html);
+  server.send(200, "text/html", WIFI_SETUP_HTML);
 }
 
 // Handler สำหรับบันทึกข้อมูล Wi-Fi
@@ -451,6 +431,7 @@ void setup() {
     dnsServer.start(53, "*", apIP);
     
     // Setup Web Server for configuration page
+    server.on("/scan-wifi", HTTP_GET, []() { handleWifiScan(server); });
     server.on("/save-wifi", HTTP_POST, handleSaveWifi);
     server.onNotFound(handleRoot); // <--- ดักทุก request ให้ไปที่หน้าตั้งค่า
     server.begin();
