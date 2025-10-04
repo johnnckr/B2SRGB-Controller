@@ -27,6 +27,13 @@
 #include "wifi_scanner.h" // <--- WiFi Scanner Feature
 
 //================================================================
+// FIRMWARE VERSION
+//================================================================
+#define FIRMWARE_VERSION "1.0.0"
+#define BUILD_DATE __DATE__
+#define BUILD_TIME __TIME__
+
+//================================================================
 // HARDWARE & WIFI CONFIGURATION
 //================================================================
 const char* ssid = "YOUR_WIFI_SSID";
@@ -545,6 +552,29 @@ void checkResetButton() {
 //================================================================
 void setup() {
   Serial.begin(115200);
+  delay(1000); // Wait for Serial Monitor
+  
+  // Print Firmware Information
+  Serial.println("\n\n========================================");
+  Serial.println("B2SRGB Controller Firmware");
+  Serial.println("========================================");
+  Serial.print("Version: ");
+  Serial.println(FIRMWARE_VERSION);
+  Serial.print("Build Date: ");
+  Serial.println(BUILD_DATE);
+  Serial.print("Build Time: ");
+  Serial.println(BUILD_TIME);
+  Serial.print("Chip: ");
+  Serial.print(ESP.getChipModel());
+  Serial.print(" Rev ");
+  Serial.println(ESP.getChipRevision());
+  Serial.print("CPU Frequency: ");
+  Serial.print(ESP.getCpuFreqMHz());
+  Serial.println(" MHz");
+  Serial.print("Flash Size: ");
+  Serial.print(ESP.getFlashChipSize() / 1024 / 1024);
+  Serial.println(" MB");
+  Serial.println("========================================\n");
   
   // Setup Reset Button
   pinMode(RESET_BUTTON, INPUT_PULLUP);
@@ -652,6 +682,22 @@ void setup() {
         json += "\"brightness\":" + String(map(currentBrightness, 0, 255, 0, 100)) + ",";
         json += "\"speed\":" + String(currentSpeed) + ",";
         json += "\"deviceName\":\"" + String(device_name) + "\"";
+        json += "}";
+        server.send(200, "application/json", json);
+      });
+      
+      // ดึงข้อมูล Firmware Version
+      server.on("/version", HTTP_GET, [](){
+        String json = "{";
+        json += "\"version\":\"" + String(FIRMWARE_VERSION) + "\",";
+        json += "\"buildDate\":\"" + String(BUILD_DATE) + "\",";
+        json += "\"buildTime\":\"" + String(BUILD_TIME) + "\",";
+        json += "\"deviceName\":\"" + String(device_name) + "\",";
+        json += "\"chipModel\":\"" + String(ESP.getChipModel()) + "\",";
+        json += "\"chipRevision\":" + String(ESP.getChipRevision()) + ",";
+        json += "\"cpuFreqMHz\":" + String(ESP.getCpuFreqMHz()) + ",";
+        json += "\"flashSize\":" + String(ESP.getFlashChipSize()) + ",";
+        json += "\"freeHeap\":" + String(ESP.getFreeHeap());
         json += "}";
         server.send(200, "application/json", json);
       });
@@ -780,6 +826,9 @@ void setup() {
   <div class="container">
     <h1>🎨 B2SRGB Control</h1>
     <div class="status" id="status">⏳ กำลังโหลด...</div>
+    <div style="text-align: center; color: #888; font-size: 12px; margin: 5px 0;">
+      Firmware v)rawliteral" + String(FIRMWARE_VERSION) + R"rawliteral(
+    </div>
     
     <div class="card">
       <h3>⚡ เปิด/ปิด</h3>

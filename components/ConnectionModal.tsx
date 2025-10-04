@@ -45,6 +45,8 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
   const [ssid, setSsid] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [wifiList, setWifiList] = useState<Array<{ssid: string, rssi: number, encryption: string}>>([]);
+  const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
     // Reset state when modal is closed
@@ -89,6 +91,25 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
     }
   };
   
+  const handleScanWifi = async () => {
+    setIsScanning(true);
+    setErrorMessage('');
+    try {
+      // เชื่อมต่อไปยัง ESP32 ที่ IP 192.168.4.1 (Provisioning Mode)
+      const response = await fetch('http://192.168.4.1/scan-wifi');
+      if (response.ok) {
+        const data = await response.json();
+        setWifiList(data.networks || []);
+      } else {
+        setErrorMessage('ไม่สามารถสแกน Wi-Fi ได้ กรุณาตรวจสอบว่าเชื่อมต่อกับ ESP32 แล้ว');
+      }
+    } catch (error) {
+      setErrorMessage('ไม่สามารถเชื่อมต่อกับอุปกรณ์ได้ (ต้องเชื่อมต่อ Wi-Fi: B2SRGB-XXXXXX-Setup)');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const handleProvision = async () => {
     if (!ssid) {
         setErrorMessage('กรุณาใส่ชื่อ Wi-Fi');
@@ -174,26 +195,78 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
       case 'provision':
         return (
             <div className="flex flex-col space-y-4">
-                <p className="text-sm text-gray-400 text-center">เชื่อมต่อมือถือกับ Wi-Fi ของอุปกรณ์ (ชื่อ B2SRGB_Setup) แล้วกรอกข้อมูล Wi-Fi บ้านของคุณที่นี่</p>
-                <input
-                    type="text"
-                    value={ssid}
-                    onChange={(e) => setSsid(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all"
-                    placeholder="ชื่อ Wi-Fi (SSID)"
-                    disabled={status === 'connecting'}
-                />
-                <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all"
-                    placeholder="รหัสผ่าน (ถ้ามี)"
-                    disabled={status === 'connecting'}
-                />
+                <p className="text-sm text-gray-400 text-center">เชื่อมต่อมือถือกับ Wi-Fi ของอุปกรณ์ (ชื่อ B2SRGB-XXXXXX-Setup) แล้วค้นหา Wi-Fi</p>
+                
+                {/* ปุ่มค้นหา WiFi */}
+                <button
+                    onClick={handleScanWifi}
+                    disabled={isScanning || status === 'connecting'}
+                    className="w-full h-12 flex items-center justify-center bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-500 disabled:bg-gray-600 transition-colors"
+                >
+                    {isScanning ? (
+                        <>
+                            <SpinnerIcon className="w-5 h-5 mr-2"/>
+                            <span>กำลังค้นหา WiFi...</span>
+                        </>
+                    ) : (
+                        <>
+                            <WifiIcon className="w-5 h-5 mr-2"/>
+                            <span>🔍 ค้นหา WiFi</span>
+                        </>
+                    )}
+                </button>
+
+                {/* รายการ WiFi ที่สแกนได้ */}
+                {wifiList.length > 0 && (
+                    <div className="max-h-48 overflow-y-auto space-y-2 border border-gray-700 rounded-lg p-2">
+                        {wifiList.map((network, index) => (
+                            <button
+                                key={index}
+                                onClick={() => {
+                                    setSsid(network.ssid);
+                                    setWifiList([]);
+                                }}
+                                className="w-full flex items-center justify-between p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-left"
+                            >
+                                <div className="flex items-center space-x-3">
+                                    <WifiIcon className="w-5 h-5 text-cyan-400"/>
+                                    <div>
+                                        <div className="font-medium text-white">{network.ssid}</div>
+                                        <div className="text-xs text-gray-400">
+                                            {network.encryption} • Signal: {network.rssi} dBm
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className={`w-3 h-3 rounded-full ${network.rssi > -60 ? 'bg-green-500' : network.rssi > -70 ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* Manual Input */}
+                <div className="pt-2 border-t border-gray-700">
+                    <p className="text-xs text-gray-500 mb-2 text-center">หรือกรอกข้อมูล Wi-Fi เอง</p>
+                    <input
+                        type="text"
+                        value={ssid}
+                        onChange={(e) => setSsid(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all mb-3"
+                        placeholder="ชื่อ Wi-Fi (SSID)"
+                        disabled={status === 'connecting'}
+                    />
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all"
+                        placeholder="รหัสผ่าน (ถ้ามี)"
+                        disabled={status === 'connecting'}
+                    />
+                </div>
+
                 <button
                     onClick={handleProvision}
-                    disabled={status === 'connecting'}
+                    disabled={status === 'connecting' || !ssid}
                     className="w-full h-12 flex items-center justify-center bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 disabled:bg-gray-600 transition-colors"
                 >
                     {status === 'connecting' ? <SpinnerIcon className="w-6 h-6"/> : 'บันทึกและเชื่อมต่อ'}
