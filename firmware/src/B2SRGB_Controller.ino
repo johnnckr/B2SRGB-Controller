@@ -39,6 +39,12 @@ CRGB leds[NUM_LEDS];
 #define DEFAULT_BRIGHTNESS 200
 
 //================================================================
+// DEVICE IDENTIFICATION (แก้ไขให้แต่ละเครื่องไม่ซ้ำกัน)
+//================================================================
+// ตัวอย่าง: "B2SRGB-001", "B2SRGB-002", "B2SRGB-Table01", "B2SRGB-Room05"
+#define DEVICE_NAME "B2SRGB-001"  // <--- เปลี่ยนให้แต่ละเครื่องไม่ซ้ำกัน!
+
+//================================================================
 // BLUETOOTH LOW ENERGY (BLE) CONFIGURATION
 //================================================================
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -586,8 +592,8 @@ void setup() {
       server.onNotFound([](){ server.send(404, "text/plain", "Not found"); });
       server.begin();
       
-      // Initialize BLE
-      BLEDevice::init("B2SRGB");
+      // Initialize BLE with unique device name
+      BLEDevice::init(DEVICE_NAME);
       BLEServer *pServer = BLEDevice::createServer();
       BLEService *pService = pServer->createService(SERVICE_UUID);
       BLECharacteristic *pCharacteristic = pService->createCharacteristic(
@@ -602,7 +608,7 @@ void setup() {
       pAdvertising->setMinPreferred(0x06);
       pAdvertising->setMinPreferred(0x12);
       BLEDevice::startAdvertising();
-      Serial.println("BLE server started. Device name: B2SRGB");
+      Serial.println("BLE server started. Device name: " + String(DEVICE_NAME));
       
     } else {
       Serial.println("\nFailed to connect to saved Wi-Fi. Entering provisioning mode.");
@@ -618,8 +624,11 @@ void setup() {
   } else {
     // --- PROVISIONING MODE (CAPTIVE PORTAL) ---
     Serial.println("No Wi-Fi config found. Starting in Provisioning Mode...");
-    WiFi.softAP("B2SRGB_Setup");
+    // ใช้ชื่อ AP ที่ไม่ซ้ำกัน (เพิ่ม _Setup)
+    String apName = String(DEVICE_NAME) + "_Setup";
+    WiFi.softAP(apName.c_str());
     IPAddress apIP = WiFi.softAPIP();
+    Serial.println("AP Name: " + apName);
     Serial.println("AP IP address: " + apIP.toString());
     
     // Start DNS Server for Captive Portal
