@@ -53,6 +53,7 @@ bool powerState = true;
 nvs_handle_t my_handle;
 char saved_ssid[32] = "";
 char saved_password[64] = "";
+char device_name[32] = "B2SRGB"; // ชื่ออุปกรณ์ (จะถูกสร้างอัตโนมัติครั้งแรก)
 
 // Mode and Pattern Variables
 String currentMode = "สีเดียว";
@@ -349,6 +350,54 @@ void handleSaveWifi() {
 }
 
 //================================================================
+// DEVICE NAME MANAGEMENT (สร้างชื่ออัตโนมัติครั้งแรก)
+//================================================================
+void generateDeviceName() {
+  // สร้างชื่ออุปกรณ์จาก MAC Address ของ ESP32
+  // รูปแบบ: B2SRGB-XXXXXX (6 หลักท้ายของ MAC)
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  
+  // ใช้ 3 bytes สุดท้ายของ MAC เป็นหมายเลขเครื่อง
+  snprintf(device_name, sizeof(device_name), "B2SRGB-%02X%02X%02X",
+           mac[3], mac[4], mac[5]);
+  
+  Serial.print("Generated device name from MAC: ");
+  Serial.println(device_name);
+}
+
+void loadDeviceName() {
+  // โหลดชื่ออุปกรณ์จาก NVS
+  size_t required_size;
+  nvs_handle_t handle;
+  esp_err_t err = nvs_open("storage", NVS_READONLY, &handle);
+  
+  if (err == ESP_OK) {
+    err = nvs_get_str(handle, "device_name", NULL, &required_size);
+    if (err == ESP_OK && required_size > 0) {
+      nvs_get_str(handle, "device_name", device_name, &required_size);
+      Serial.print("Loaded saved device name: ");
+      Serial.println(device_name);
+    } else {
+      // ไม่มีชื่อเก่า สร้างใหม่
+      Serial.println("No saved device name found. Generating new one...");
+      generateDeviceName();
+      
+      // บันทึกชื่อใหม่ลง NVS
+      nvs_close(handle);
+      nvs_open("storage", NVS_READWRITE, &handle);
+      nvs_set_str(handle, "device_name", device_name);
+      nvs_commit(handle);
+      Serial.println("Device name saved to NVS");
+    }
+    nvs_close(handle);
+  } else {
+    // NVS ยังไม่เปิด ใช้ชื่อเริ่มต้น
+    Serial.println("NVS not ready, using default name");
+  }
+}
+
+//================================================================
 // SETUP FUNCTION
 //================================================================
 void setup() {
@@ -364,6 +413,9 @@ void setup() {
       nvs_flash_erase();
       err = nvs_flash_init();
   }
+  
+  // Load or generate device name (ชื่ออุปกรณ์จะถูกสร้างครั้งแรกและจำไว้ตลอดไป)
+  loadDeviceName();
   
   // Load saved Wi-Fi credentials
   size_t required_size;
@@ -387,12 +439,237 @@ void setup() {
 
     if (WiFi.status() == WL_CONNECTED) {
       Serial.println("\nWiFi connected! IP: " + WiFi.localIP().toString());
-      server.on("/command", HTTP_POST, [](){ server.send(200, "text/plain", "OK"); parseAndExecuteCommand(server.arg("plain")); });
+      
+      // ===== HTTP API Endpoints สำหรับ iOS และอุปกรณ์ทั่วไป =====
+      // รับคำสั่งควบคุม LED
+      server.on("/command", HTTP_POST, [](){ 
+        server.send(200, "text/plain", "OK"); 
+        parseAndExecuteCommand(server.arg("plain")); 
+      });
+      
+      // ตั้งค่าเปิด/ปิดไฟ
+      server.on("/power", HTTP_POST, [](){
+        String state = server.arg("state");
+        handlePower(state == "on" || state == "true" || state == "1");
+        server.send(200, "application/json", "{\"status\":\"ok\",\"power\":" + String(powerState ? "true" : "false") + "}");
+      });
+      
+      // ตั้งค่าโหมด
+      server.on("/mode", HTTP_POST, [](){
+        String mode = server.arg("mode");
+        handleMode(mode);
+        server.send(200, "application/json", "{\"status\":\"ok\",\"mode\":\"" + currentMode + "\"}");
+      });
+      
+      // ตั้งค่าเอฟเฟกต์
+      server.on("/pattern", HTTP_POST, [](){
+        String pattern = server.arg("pattern");
+        handlePattern(pattern);
+        server.send(200, "application/json", "{\"status\":\"ok\",\"pattern\":\"" + currentPattern + "\"}");
+      });
+      
+      // ตั้งค่าสี RGB
+      server.on("/color", HTTP_POST, [](){
+        int r = server.arg("r").toInt();
+        int g = server.arg("g").toInt();
+        int b = server.arg("b").toInt();
+        
+        DynamicJsonDocument doc(128);
+        doc["r"] = r;
+        doc["g"] = g;
+        doc["b"] = b;
+        handleColor(doc.as<JsonObject>());
+        
+        server.send(200, "application/json", "{\"status\":\"ok\",\"color\":{\"r\":" + String(r) + ",\"g\":" + String(g) + ",\"b\":" + String(b) + "}}");
+      });
+      
+      // ตั้งค่าความสว่าง
+      server.on("/brightness", HTTP_POST, [](){
+        int brightness = server.arg("value").toInt();
+        handleBrightness(brightness);
+        server.send(200, "application/json", "{\"status\":\"ok\",\"brightness\":" + String(brightness) + "}");
+      });
+      
+      // ตั้งค่าความเร็ว
+      server.on("/speed", HTTP_POST, [](){
+        int speed = server.arg("value").toInt();
+        handleSpeed(speed);
+        server.send(200, "application/json", "{\"status\":\"ok\",\"speed\":" + String(speed) + "}");
+      });
+      
+      // ดึงสถานะปัจจุบัน
+      server.on("/status", HTTP_GET, [](){
+        String json = "{";
+        json += "\"power\":" + String(powerState ? "true" : "false") + ",";
+        json += "\"mode\":\"" + currentMode + "\",";
+        json += "\"pattern\":\"" + currentPattern + "\",";
+        json += "\"brightness\":" + String(map(currentBrightness, 0, 255, 0, 100)) + ",";
+        json += "\"speed\":" + String(currentSpeed) + ",";
+        json += "\"deviceName\":\"" + String(device_name) + "\"";
+        json += "}";
+        server.send(200, "application/json", json);
+      });
+      
+      // หน้า Control Panel สำหรับเปิดใน Browser
+      server.on("/", HTTP_GET, [](){
+        String html = R"rawliteral(
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>B2SRGB Control Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial; margin: 0; padding: 20px; background: #1a1a1a; color: #fff; }
+    h1 { color: #03DAC6; text-align: center; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .card { background: #2a2a2a; border-radius: 10px; padding: 20px; margin: 15px 0; }
+    button { width: 100%; padding: 15px; margin: 5px 0; border: none; border-radius: 5px; 
+             font-size: 16px; cursor: pointer; background: #03DAC6; color: #000; font-weight: bold; }
+    button:hover { background: #00bfa5; }
+    button.off { background: #555; color: #fff; }
+    input[type="range"] { width: 100%; }
+    .color-picker { display: flex; gap: 10px; align-items: center; }
+    input[type="color"] { width: 60px; height: 60px; border: none; border-radius: 5px; cursor: pointer; }
+    .status { text-align: center; padding: 10px; background: #333; border-radius: 5px; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 B2SRGB Control</h1>
+    <div class="status" id="status">กำลังโหลด...</div>
+    
+    <div class="card">
+      <h3>⚡ เปิด/ปิด</h3>
+      <button id="powerBtn" onclick="togglePower()">กำลังโหลด...</button>
+    </div>
+    
+    <div class="card">
+      <h3>🎭 โหมด</h3>
+      <button onclick="setMode('สีเดียว')">สีเดียว</button>
+      <button onclick="setMode('เปลี่ยนสี')">เปลี่ยนสี</button>
+      <button onclick="setMode('กระพริบ')">กระพริบ</button>
+      <button onclick="setMode('เอฟเฟกต์')">เอฟเฟกต์</button>
+      <button onclick="setMode('ตามเพลง')">ตามเพลง</button>
+    </div>
+    
+    <div class="card">
+      <h3>✨ เอฟเฟกต์</h3>
+      <button onclick="setPattern('รุ้งวนลูป')">รุ้งวนลูป</button>
+      <button onclick="setPattern('รุ้งวิ่งไล่')">รุ้งวิ่งไล่</button>
+      <button onclick="setPattern('เปลวไฟ')">เปลวไฟ</button>
+      <button onclick="setPattern('คลื่นทะเล')">คลื่นทะเล</button>
+      <button onclick="setPattern('ประกาย')">ประกาย</button>
+    </div>
+    
+    <div class="card">
+      <h3>🎨 สี</h3>
+      <div class="color-picker">
+        <input type="color" id="colorPicker" value="#ffffff">
+        <button onclick="setColor()">ตั้งค่าสี</button>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h3>💡 ความสว่าง: <span id="brightnessValue">50</span>%</h3>
+      <input type="range" id="brightness" min="0" max="100" value="50" oninput="setBrightness(this.value)">
+    </div>
+    
+    <div class="card">
+      <h3>⚡ ความเร็ว: <span id="speedValue">50</span></h3>
+      <input type="range" id="speed" min="0" max="100" value="50" oninput="setSpeed(this.value)">
+    </div>
+  </div>
+  
+  <script>
+    let powerState = true;
+    
+    function updateStatus() {
+      fetch('/status')
+        .then(r => r.json())
+        .then(data => {
+          powerState = data.power;
+          document.getElementById('powerBtn').textContent = powerState ? '🟢 เปิด' : '🔴 ปิด';
+          document.getElementById('powerBtn').className = powerState ? '' : 'off';
+          document.getElementById('status').textContent = 
+            `📱 ${data.deviceName} | โหมด: ${data.mode} | ${powerState ? 'เปิด' : 'ปิด'}`;
+          document.getElementById('brightness').value = data.brightness;
+          document.getElementById('brightnessValue').textContent = data.brightness;
+          document.getElementById('speed').value = data.speed;
+          document.getElementById('speedValue').textContent = data.speed;
+        });
+    }
+    
+    function togglePower() {
+      powerState = !powerState;
+      fetch('/power', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'state=' + (powerState ? 'on' : 'off')
+      }).then(() => updateStatus());
+    }
+    
+    function setMode(mode) {
+      fetch('/mode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'mode=' + encodeURIComponent(mode)
+      }).then(() => updateStatus());
+    }
+    
+    function setPattern(pattern) {
+      fetch('/pattern', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'pattern=' + encodeURIComponent(pattern)
+      }).then(() => updateStatus());
+    }
+    
+    function setColor() {
+      const color = document.getElementById('colorPicker').value;
+      const r = parseInt(color.substr(1,2), 16);
+      const g = parseInt(color.substr(3,2), 16);
+      const b = parseInt(color.substr(5,2), 16);
+      
+      fetch('/color', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `r=${r}&g=${g}&b=${b}`
+      });
+    }
+    
+    function setBrightness(value) {
+      document.getElementById('brightnessValue').textContent = value;
+      fetch('/brightness', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'value=' + value
+      });
+    }
+    
+    function setSpeed(value) {
+      document.getElementById('speedValue').textContent = value;
+      fetch('/speed', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'value=' + value
+      });
+    }
+    
+    // อัปเดตสถานะทุก 3 วินาที
+    updateStatus();
+    setInterval(updateStatus, 3000);
+  </script>
+</body>
+</html>
+)rawliteral";
+        server.send(200, "text/html", html);
+      });
+      
       server.onNotFound([](){ server.send(404, "text/plain", "Not found"); });
       server.begin();
       
-      // Initialize BLE
-      BLEDevice::init("B2SRGB");
+      // Initialize BLE with auto-generated device name
+      BLEDevice::init(device_name);
       BLEServer *pServer = BLEDevice::createServer();
       BLEService *pService = pServer->createService(SERVICE_UUID);
       BLECharacteristic *pCharacteristic = pService->createCharacteristic(
@@ -407,7 +684,8 @@ void setup() {
       pAdvertising->setMinPreferred(0x06);
       pAdvertising->setMinPreferred(0x12);
       BLEDevice::startAdvertising();
-      Serial.println("BLE server started. Device name: B2SRGB");
+      Serial.print("BLE server started. Device name: ");
+      Serial.println(device_name);
       
     } else {
       Serial.println("\nFailed to connect to saved Wi-Fi. Entering provisioning mode.");
@@ -423,8 +701,15 @@ void setup() {
   } else {
     // --- PROVISIONING MODE (CAPTIVE PORTAL) ---
     Serial.println("No Wi-Fi config found. Starting in Provisioning Mode...");
-    WiFi.softAP("B2SRGB_Setup");
+    
+    // สร้าง SSID จากชื่ออุปกรณ์
+    char ap_ssid[40];
+    snprintf(ap_ssid, sizeof(ap_ssid), "%s-Setup", device_name);
+    
+    WiFi.softAP(ap_ssid);
     IPAddress apIP = WiFi.softAPIP();
+    Serial.print("AP SSID: ");
+    Serial.println(ap_ssid);
     Serial.println("AP IP address: " + apIP.toString());
     
     // Start DNS Server for Captive Portal
