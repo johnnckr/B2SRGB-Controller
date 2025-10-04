@@ -11,6 +11,7 @@ import Slider from './components/Slider';
 import ColorPicker from './components/ColorPicker';
 import MusicMode from './components/MusicMode';
 import ConnectionModal from './components/ConnectionModal';
+import HelpModal from './components/HelpModal';
 import { connectionService } from './services/connectionService';
 import AutoBrightnessSlider from './components/AutoBrightnessSlider';
 import { useAmbientLightSensor } from './hooks/useAmbientLightSensor';
@@ -40,6 +41,7 @@ const patternPresets: Record<string, string[]> = {
 const App: React.FC = () => {
   const [isConnected, setIsConnected] = useState(connectionService.isConnected);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [powerOn, setPowerOn] = useState(true);
   const [mode, setMode] = useState<LightMode>(LightMode.Effects);
   const [pattern, setPattern] = useState<Pattern>(Pattern.RainbowCycle);
@@ -186,11 +188,20 @@ const App: React.FC = () => {
       <footer className="text-center text-xs text-gray-500 p-4 border-t border-gray-800 space-y-2">
         <p>B2SRGB Controller</p>
         <div className="flex justify-center items-center space-x-4">
+          <button
+            onClick={() => setIsHelpOpen(true)}
+            className="flex items-center space-x-1.5 hover:text-cyan-400 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>วิธีใช้</span>
+          </button>
           <a href="tel:02097959398" className="flex items-center space-x-1.5 hover:text-cyan-400 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
             </svg>
-            <span>02097959398</span>
+            <span>โทร</span>
           </a>
           <a 
             href="https://www.facebook.com/NeeKPS" 
@@ -210,6 +221,7 @@ const App: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onConnectionChange={handleConnectionChange}
       />
+      {isHelpOpen && <HelpModal onClose={() => setIsHelpOpen(false)} />}
     </div>
   );
 };

@@ -41,6 +41,12 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event: serve from cache first, fall back to network, and cache new resources.
 self.addEventListener('fetch', (event) => {
+  // Skip caching for external requests (ESP32, Bluetooth, etc.)
+  const url = new URL(event.request.url);
+  if (url.hostname !== self.location.hostname) {
+    return; // ไม่ cache request ไป ESP32
+  }
+
   // Only handle GET requests
   if (event.request.method !== 'GET') {
     return;

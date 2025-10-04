@@ -53,33 +53,53 @@ class ConnectionServiceManager implements IConnectionService {
 
     async connectWifi(ip: string): Promise<boolean> {
         console.log(`[WiFi] Attempting to connect to ${ip}...`);
-        // MOCK: In a real app, you'd establish a WebSocket or check an HTTP endpoint.
-        // For this mock, we'll just simulate a successful connection after a delay.
-        return new Promise(resolve => {
-            setTimeout(() => {
-                this.wifiIp = ip;
-                this.setConnectionStatus(ConnectionType.WiFi, true);
-                console.log('[WiFi] Mock connection successful.');
-                resolve(true);
-            }, 1000);
-        });
+        try {
+            // ทดสอบการเชื่อมต่อโดยส่ง GET request ไปที่ ESP32
+            const response = await fetch(`http://${ip}/`, {
+                method: 'GET',
+                mode: 'no-cors', // ป้องกัน CORS error
+                cache: 'no-cache',
+            });
+
+            this.wifiIp = ip;
+            this.setConnectionStatus(ConnectionType.WiFi, true);
+            console.log('[WiFi] Connection successful to ' + ip);
+            return true;
+
+        } catch (error) {
+            console.error('[WiFi] Connection failed:', error);
+            alert(`Cannot connect to ESP32 at ${ip}\n\nPlease check:\n1. ESP32 is connected to WiFi\n2. Computer and ESP32 are on the same network\n3. IP address is correct`);
+            return false;
+        }
     }
 
     async connectBluetooth(): Promise<boolean> {
         console.log('[BT] Starting Bluetooth scan...');
+        
+        // ตรวจสอบว่าเบราว์เซอร์รองรับ Web Bluetooth API หรือไม่
+        if (!('bluetooth' in navigator)) {
+            const errorMsg = 'Web Bluetooth API is not available on this browser.\n\n' +
+                           'Please use:\n' +
+                           '✅ Chrome (Desktop/Android)\n' +
+                           '✅ Edge (Desktop)\n' +
+                           '✅ Opera (Desktop/Android)\n\n' +
+                           'Or use HTTP connection instead.';
+            alert(errorMsg);
+            console.error('[BT] Web Bluetooth API not supported');
+            return false;
+        }
+
         try {
-            // FIX: Property 'bluetooth' does not exist on type 'Navigator'. Cast to any to bypass.
-            if (!(navigator as any).bluetooth) {
-                alert('Web Bluetooth API is not available on this browser.');
-                return false;
-            }
             // FIX: Property 'bluetooth' does not exist on type 'Navigator'. Cast to any to bypass.
             const device = await (navigator as any).bluetooth.requestDevice({
                 filters: [{ services: [BLE_SERVICE_UUID] }],
                 optionalServices: [BLE_SERVICE_UUID]
             });
 
-            if (!device || !device.gatt) return false;
+            if (!device || !device.gatt) {
+                console.error('[BT] Device or GATT not available');
+                return false;
+            }
             
             console.log('[BT] Device found, connecting to GATT server...');
             const server = await device.gatt.connect();
@@ -96,6 +116,9 @@ class ConnectionServiceManager implements IConnectionService {
 
         } catch (error) {
             console.error('[BT] Connection failed:', error);
+            if ((error as Error).message.includes('User cancelled')) {
+                console.log('[BT] User cancelled the pairing request');
+            }
             this.disconnect();
             return false;
         }
@@ -109,7 +132,7 @@ class ConnectionServiceManager implements IConnectionService {
         console.log('[Connection] Disconnected.');
     }
 
-    private sendCommand(command: object) {
+    private async sendCommand(command: object) {
         if (!this.isConnected) {
             console.warn('Attempted to send command while disconnected:', command);
             return;
@@ -119,16 +142,32 @@ class ConnectionServiceManager implements IConnectionService {
 
         switch (this.connectionType) {
             case ConnectionType.WiFi:
-                // MOCK: Send via WebSocket or HTTP POST
-                console.log(`[WiFi SEND to ${this.wifiIp}]`, commandString);
-                // fetch(`http://${this.wifiIp}/command`, { method: 'POST', body: commandString });
+                try {
+                    console.log(`[WiFi SEND to ${this.wifiIp}]`, commandString);
+                    const response = await fetch(`http://${this.wifiIp}/command`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: commandString,
+                        mode: 'no-cors', // ป้องกัน CORS error
+                    });
+                    console.log('[WiFi] Command sent successfully');
+                } catch (error) {
+                    console.error('[WiFi] Failed to send command:', error);
+                }
                 break;
             
             case ConnectionType.Bluetooth:
                 if (this.bleCharacteristic) {
-                    console.log('[BT SEND]', commandString);
-                    const encoder = new TextEncoder();
-                    this.bleCharacteristic.writeValue(encoder.encode(commandString));
+                    try {
+                        console.log('[BT SEND]', commandString);
+                        const encoder = new TextEncoder();
+                        await this.bleCharacteristic.writeValue(encoder.encode(commandString));
+                        console.log('[BT] Command sent successfully');
+                    } catch (error) {
+                        console.error('[BT] Failed to send command:', error);
+                    }
                 }
                 break;
             
