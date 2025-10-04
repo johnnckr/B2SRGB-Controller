@@ -1,60 +1,48 @@
-/*
- * B2SRGB Controller Firmware - Captive Portal Edition
- * 
- * เวอร์ชั่นอัปเกรด: เมื่อ ESP32 อยู่ในโหมดตั้งค่า (AP Mode)
- * มันจะสร้าง Captive Portal เพื่อให้หน้าต่างตั้งค่าเด้งขึ้นมาบนมือถือโดยอัตโนมัติ
- * 
- * ไลบรารีที่ต้องติดตั้ง:
- * 1. ArduinoJson
- * 2. FastLED
- * 3. ESP32 BLE Arduino
- * (DNSServer และ WebServer เป็นส่วนหนึ่งของ ESP32 core)
- */
-
-//================================================================
-// LIBRARIES
-//================================================================
+# 1 "C:\\Users\\johnn\\AppData\\Local\\Temp\\tmp8lj4kklt"
+#include <Arduino.h>
+# 1 "D:/9.15/B2SRGB/firmware/src/B2SRGB_Controller.ino"
+# 17 "D:/9.15/B2SRGB/firmware/src/B2SRGB_Controller.ino"
 #include <WiFi.h>
 #include <WebServer.h>
-#include <DNSServer.h> // <--- ไลบรารีใหม่สำหรับ Captive Portal
+#include <DNSServer.h>
 #include <ArduinoJson.h>
 #include <FastLED.h>
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
-#include "nvs_flash.h" // <--- ไลบรารีสำหรับบันทึกข้อมูล Wi-Fi
+#include "nvs_flash.h"
 #include "nvs.h"
-#include "wifi_scanner.h" // <--- WiFi Scanner Feature
+#include "wifi_scanner.h"
 
-//================================================================
-// HARDWARE & WIFI CONFIGURATION
-//================================================================
+
+
+
 const char* ssid = "YOUR_WIFI_SSID";
 const char* password = "YOUR_WIFI_PASSWORD";
-#define LED_PIN     5
-#define NUM_LEDS    1200
-#define LED_TYPE    WS2812B
+#define LED_PIN 5
+#define NUM_LEDS 1200
+#define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
 CRGB leds[NUM_LEDS];
 #define DEFAULT_BRIGHTNESS 200
 
-//================================================================
-// BLUETOOTH LOW ENERGY (BLE) CONFIGURATION
-//================================================================
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+
+
+
+#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
-//================================================================
-// GLOBAL VARIABLES
-//================================================================
+
+
+
 WebServer server(80);
-DNSServer dnsServer; // <--- สร้าง object ของ DNS Server
+DNSServer dnsServer;
 bool powerState = true;
 nvs_handle_t my_handle;
 char saved_ssid[32] = "";
 char saved_password[64] = "";
 
-// Mode and Pattern Variables
+
 String currentMode = "สีเดียว";
 String currentPattern = "รุ้งวนลูป";
 CRGB currentColor = CRGB::White;
@@ -63,14 +51,14 @@ int paletteSize = 5;
 int currentSpeed = 50;
 int currentBrightness = DEFAULT_BRIGHTNESS;
 
-// Animation Variables
+
 uint8_t gHue = 0;
 uint8_t gCurrentPatternNumber = 0;
 unsigned long lastUpdate = 0;
 
-//================================================================
-// FORWARD DECLARATION & CALLBACKS
-//================================================================
+
+
+
 void parseAndExecuteCommand(String json);
 class MyCharacteristicCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
@@ -80,12 +68,27 @@ class MyCharacteristicCallbacks: public BLECharacteristicCallbacks {
       }
     }
 };
-
-//================================================================
-// ANIMATION PATTERNS
-//================================================================
-
-// Rainbow Cycle Pattern
+void rainbowCycle();
+void rainbowChase();
+void rainbowTwinkle();
+void fireEffect();
+void oceanWave();
+void paletteFade();
+void paletteStrobe();
+void handlePower(bool on);
+void handleMode(String mode);
+void handlePattern(String pattern);
+void handleColor(JsonObject color);
+void handlePalette(JsonArray paletteArray);
+void handleBrightness(int brightness);
+void handleSpeed(int speed);
+void handleMusicBeat(JsonObject color, int brightness);
+void handleRoot();
+void handleSaveWifi();
+void setup();
+void updateAnimation();
+void loop();
+#line 89 "D:/9.15/B2SRGB/firmware/src/B2SRGB_Controller.ino"
 void rainbowCycle() {
   for(int i = 0; i < NUM_LEDS; i++) {
     leds[i] = CHSV(gHue + (i * 255 / NUM_LEDS), 255, 255);
@@ -94,7 +97,7 @@ void rainbowCycle() {
   gHue++;
 }
 
-// Rainbow Chase Pattern
+
 void rainbowChase() {
   static uint8_t startIndex = 0;
   for(int i = 0; i < NUM_LEDS; i++) {
@@ -104,7 +107,7 @@ void rainbowChase() {
   startIndex += 2;
 }
 
-// Rainbow Twinkle Pattern
+
 void rainbowTwinkle() {
   fadeToBlackBy(leds, NUM_LEDS, 20);
   int pos = random16(NUM_LEDS);
@@ -112,88 +115,88 @@ void rainbowTwinkle() {
   FastLED.show();
 }
 
-// Fire Pattern
+
 void fireEffect() {
   static byte heat[NUM_LEDS];
-  
-  // Step 1: Cool down every cell
+
+
   for(int i = 0; i < NUM_LEDS; i++) {
     heat[i] = qsub8(heat[i], random8(0, ((55 * 10) / NUM_LEDS) + 2));
   }
-  
-  // Step 2: Heat from each cell drifts up
+
+
   for(int k = NUM_LEDS - 1; k >= 2; k--) {
     heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2]) / 3;
   }
-  
-  // Step 3: Randomly ignite new sparks
+
+
   if(random8() < 120) {
     int y = random8(7);
     heat[y] = qadd8(heat[y], random8(160, 255));
   }
-  
-  // Step 4: Convert heat to LED colors
+
+
   for(int j = 0; j < NUM_LEDS; j++) {
     byte colorindex = scale8(heat[j], 240);
     CRGB color = HeatColor(colorindex);
     leds[j] = color;
   }
-  
+
   FastLED.show();
 }
 
-// Ocean Wave Pattern
+
 void oceanWave() {
   static uint16_t sPseudotime = 0;
   static uint16_t sLastMillis = 0;
   static uint16_t sHue16 = 0;
-  
+
   uint8_t sat8 = beatsin88(87, 220, 250);
   uint8_t brightdepth = beatsin88(341, 96, 224);
   uint16_t brightnessthetainc16 = beatsin88(203, (25 * 256), (40 * 256));
   uint8_t msmultiplier = beatsin88(147, 23, 60);
-  
+
   uint16_t hue16 = sHue16;
   uint16_t hueinc16 = beatsin88(113, 1, 3000);
-  
+
   uint16_t ms = millis();
   uint16_t deltams = ms - sLastMillis;
   sLastMillis = ms;
   sPseudotime += deltams * msmultiplier;
   sHue16 += deltams * beatsin88(400, 5, 9);
   uint16_t brightnesstheta16 = sPseudotime;
-  
+
   for(uint16_t i = 0; i < NUM_LEDS; i++) {
     hue16 += hueinc16;
     uint8_t hue8 = hue16 / 256;
-    
+
     brightnesstheta16 += brightnessthetainc16;
     uint16_t b16 = sin16(brightnesstheta16) + 32768;
     uint16_t bri16 = (uint32_t)((uint32_t)b16 * (uint32_t)b16) / 65536;
     uint8_t bri8 = (uint32_t)(((uint32_t)bri16) * brightdepth) / 65536;
     bri8 += (255 - brightdepth);
-    
+
     CRGB newcolor = CHSV(hue8, sat8, bri8);
     nblend(leds[i], newcolor, 64);
   }
-  
+
   FastLED.show();
 }
 
-// Palette Fade
+
 void paletteFade() {
   static uint8_t paletteIndex = 0;
   static uint8_t blendAmount = 0;
   static unsigned long lastChange = 0;
-  
+
   if(millis() - lastChange > 50) {
     CRGB color1 = palette[paletteIndex % paletteSize];
     CRGB color2 = palette[(paletteIndex + 1) % paletteSize];
-    
+
     CRGB blendedColor = blend(color1, color2, blendAmount);
     fill_solid(leds, NUM_LEDS, blendedColor);
     FastLED.show();
-    
+
     blendAmount += 5;
     if(blendAmount == 0) {
       paletteIndex++;
@@ -202,12 +205,12 @@ void paletteFade() {
   }
 }
 
-// Palette Strobe
+
 void paletteStrobe() {
   static uint8_t paletteIndex = 0;
   static unsigned long lastChange = 0;
   int strobeDelay = map(currentSpeed, 0, 100, 500, 50);
-  
+
   if(millis() - lastChange > strobeDelay) {
     fill_solid(leds, NUM_LEDS, palette[paletteIndex % paletteSize]);
     FastLED.show();
@@ -216,9 +219,9 @@ void paletteStrobe() {
   }
 }
 
-//================================================================
-// COMMAND HANDLER FUNCTIONS
-//================================================================
+
+
+
 
 void handlePower(bool on) {
   powerState = on;
@@ -226,7 +229,7 @@ void handlePower(bool on) {
     FastLED.clear();
     FastLED.show();
   } else {
-    // Restore last state
+
     FastLED.setBrightness(currentBrightness);
     FastLED.show();
   }
@@ -236,8 +239,8 @@ void handlePower(bool on) {
 void handleMode(String mode) {
   currentMode = mode;
   Serial.println("Mode changed to: " + mode);
-  
-  // Reset animation state when mode changes
+
+
   gHue = 0;
   lastUpdate = 0;
 }
@@ -245,8 +248,8 @@ void handleMode(String mode) {
 void handlePattern(String pattern) {
   currentPattern = pattern;
   Serial.println("Pattern changed to: " + pattern);
-  
-  // Reset animation state
+
+
   gHue = 0;
   lastUpdate = 0;
 }
@@ -256,24 +259,24 @@ void handleColor(JsonObject color) {
     currentColor = CRGB(color["r"], color["g"], color["b"]);
     fill_solid(leds, NUM_LEDS, currentColor);
     FastLED.show();
-    Serial.println("Color set to RGB(" + String(color["r"].as<int>()) + "," + 
+    Serial.println("Color set to RGB(" + String(color["r"].as<int>()) + "," +
                    String(color["g"].as<int>()) + "," + String(color["b"].as<int>()) + ")");
   }
 }
 
 void handlePalette(JsonArray paletteArray) {
-  paletteSize = min((int)paletteArray.size(), 10); // Max 10 colors
-  
+  paletteSize = min((int)paletteArray.size(), 10);
+
   for(int i = 0; i < paletteSize; i++) {
     JsonObject colorObj = paletteArray[i];
     palette[i] = CRGB(colorObj["r"], colorObj["g"], colorObj["b"]);
   }
-  
+
   Serial.println("Palette updated with " + String(paletteSize) + " colors");
 }
 
 void handleBrightness(int brightness) {
-  // Convert 0-100 to 0-255
+
   currentBrightness = map(brightness, 0, 100, 0, 255);
   FastLED.setBrightness(currentBrightness);
   FastLED.show();
@@ -289,19 +292,19 @@ void handleMusicBeat(JsonObject color, int brightness) {
   if (powerState) {
     CRGB beatColor = CRGB(color["r"], color["g"], color["b"]);
     int beatBrightness = map(brightness, 0, 100, 0, 255);
-    
-    // Flash effect
+
+
     fill_solid(leds, NUM_LEDS, beatColor);
     FastLED.setBrightness(beatBrightness);
     FastLED.show();
-    
+
     Serial.println("Music beat detected");
   }
 }
 
-//================================================================
-// JSON PARSING LOGIC (เหมือนเดิม)
-//================================================================
+
+
+
 void parseAndExecuteCommand(String json) {
   DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, json);
@@ -317,15 +320,15 @@ void parseAndExecuteCommand(String json) {
   else if (strcmp(type, "MUSIC_BEAT") == 0) handleMusicBeat(doc["color"].as<JsonObject>(), doc["brightness"]);
 }
 
-//================================================================
-// PROVISIONING MODE HANDLERS (ส่วนสำหรับตั้งค่า)
-//================================================================
-// หน้า HTML สำหรับการตั้งค่า (จะถูกส่งไปให้เบราว์เซอร์)
+
+
+
+
 void handleRoot() {
   server.send(200, "text/html", WIFI_SETUP_HTML);
 }
 
-// Handler สำหรับบันทึกข้อมูล Wi-Fi
+
 void handleSaveWifi() {
   String new_ssid = server.arg("ssid");
   String new_pass = server.arg("pass");
@@ -336,7 +339,7 @@ void handleSaveWifi() {
   nvs_set_str(my_handle, "password", new_pass.c_str());
   nvs_commit(my_handle);
   nvs_close(my_handle);
-  
+
   String html = R"rawliteral(
 <!DOCTYPE HTML><html><head><title>Setup Success</title><meta name="viewport" content="width=device-width, initial-scale=1">
 <style>body{font-family: Arial; background-color: #121212; color: #03DAC6; text-align: center; padding-top: 50px;}</style>
@@ -348,24 +351,24 @@ void handleSaveWifi() {
   ESP.restart();
 }
 
-//================================================================
-// SETUP FUNCTION
-//================================================================
+
+
+
 void setup() {
   Serial.begin(115200);
-  
-  // Initialize LEDs
+
+
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(DEFAULT_BRIGHTNESS);
 
-  // Initialize NVS (Non-Volatile Storage)
+
   esp_err_t err = nvs_flash_init();
   if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
       nvs_flash_erase();
       err = nvs_flash_init();
   }
-  
-  // Load saved Wi-Fi credentials
+
+
   size_t required_size;
   nvs_open("storage", NVS_READONLY, &my_handle);
   nvs_get_str(my_handle, "ssid", NULL, &required_size);
@@ -373,9 +376,9 @@ void setup() {
   nvs_get_str(my_handle, "password", NULL, &required_size);
   nvs_get_str(my_handle, "password", saved_password, &required_size);
   nvs_close(my_handle);
-  
+
   if (strlen(saved_ssid) > 0) {
-    // --- NORMAL MODE ---
+
     Serial.println("Found saved Wi-Fi. Connecting in Normal Mode...");
     WiFi.begin(saved_ssid, saved_password);
     int attempts = 0;
@@ -390,8 +393,8 @@ void setup() {
       server.on("/command", HTTP_POST, [](){ server.send(200, "text/plain", "OK"); parseAndExecuteCommand(server.arg("plain")); });
       server.onNotFound([](){ server.send(404, "text/plain", "Not found"); });
       server.begin();
-      
-      // Initialize BLE
+
+
       BLEDevice::init("B2SRGB");
       BLEServer *pServer = BLEDevice::createServer();
       BLEService *pService = pServer->createService(SERVICE_UUID);
@@ -408,10 +411,10 @@ void setup() {
       pAdvertising->setMinPreferred(0x12);
       BLEDevice::startAdvertising();
       Serial.println("BLE server started. Device name: B2SRGB");
-      
+
     } else {
       Serial.println("\nFailed to connect to saved Wi-Fi. Entering provisioning mode.");
-      // ถ้าเชื่อมต่อ Wi-Fi ที่เคยบันทึกไว้ไม่ได้ ให้ลบข้อมูลเก่าแล้วเข้าโหมดตั้งค่า
+
       nvs_open("storage", NVS_READWRITE, &my_handle);
       nvs_erase_key(my_handle, "ssid");
       nvs_erase_key(my_handle, "password");
@@ -421,48 +424,48 @@ void setup() {
     }
 
   } else {
-    // --- PROVISIONING MODE (CAPTIVE PORTAL) ---
+
     Serial.println("No Wi-Fi config found. Starting in Provisioning Mode...");
     WiFi.softAP("B2SRGB_Setup");
     IPAddress apIP = WiFi.softAPIP();
     Serial.println("AP IP address: " + apIP.toString());
-    
-    // Start DNS Server for Captive Portal
+
+
     dnsServer.start(53, "*", apIP);
-    
-    // Setup Web Server for configuration page
+
+
     server.on("/scan-wifi", HTTP_GET, []() { handleWifiScan(server); });
     server.on("/save-wifi", HTTP_POST, handleSaveWifi);
-    server.onNotFound(handleRoot); // <--- ดักทุก request ให้ไปที่หน้าตั้งค่า
+    server.onNotFound(handleRoot);
     server.begin();
     Serial.println("HTTP server and Captive Portal started.");
   }
 }
 
-//================================================================
-// ANIMATION UPDATE
-//================================================================
+
+
+
 void updateAnimation() {
   if (!powerState) return;
-  
-  // Calculate delay based on speed (0-100 maps to slower-faster)
+
+
   int animationDelay = map(currentSpeed, 0, 100, 100, 10);
-  
+
   if (millis() - lastUpdate > animationDelay) {
-    // Execute animation based on mode and pattern
+
     if (currentMode == "สีเดียว") {
-      // Solid color - already handled in handleColor
+
     }
     else if (currentMode == "เปลี่ยนสี") {
-      // Fade mode
+
       paletteFade();
     }
     else if (currentMode == "กระพริบ") {
-      // Strobe mode
+
       paletteStrobe();
     }
     else if (currentMode == "เอฟเฟกต์") {
-      // Effects mode - run pattern
+
       if (currentPattern == "รุ้งวนลูป") {
         rainbowCycle();
       }
@@ -479,7 +482,7 @@ void updateAnimation() {
         oceanWave();
       }
       else if (currentPattern == "ป่าไม้") {
-        // Forest effect (green tones)
+
         static uint8_t pos = 0;
         for(int i = 0; i < NUM_LEDS; i++) {
           leds[i] = CHSV(96 + sin8(i * 10 + pos), 255, 255);
@@ -488,15 +491,15 @@ void updateAnimation() {
         pos++;
       }
       else if (currentPattern == "พระอาทิตย์ตก") {
-        // Sunset effect
+
         for(int i = 0; i < NUM_LEDS; i++) {
-          int hue = map(i, 0, NUM_LEDS, 0, 32); // Red to Orange
+          int hue = map(i, 0, NUM_LEDS, 0, 32);
           leds[i] = CHSV(hue, 255, 255);
         }
         FastLED.show();
       }
       else if (currentPattern == "แสงเหนือ") {
-        // Aurora effect
+
         static uint8_t pos = 0;
         for(int i = 0; i < NUM_LEDS; i++) {
           leds[i] = CHSV((128 + sin8(i * 5 + pos)) % 255, 200, 200);
@@ -505,7 +508,7 @@ void updateAnimation() {
         pos += 2;
       }
       else if (currentPattern == "ลูกกวาด") {
-        // Candy effect (pink and white)
+
         for(int i = 0; i < NUM_LEDS; i++) {
           if ((i + gHue) % 10 < 5) {
             leds[i] = CRGB::HotPink;
@@ -517,28 +520,28 @@ void updateAnimation() {
         gHue++;
       }
       else if (currentPattern == "ลาวา") {
-        // Lava effect (red and orange)
-        fireEffect(); // Reuse fire effect
+
+        fireEffect();
       }
       else if (currentPattern == "ดาวตก") {
-        // Meteor effect
+
         static int meteorPos = 0;
         fadeToBlackBy(leds, NUM_LEDS, 64);
-        
+
         for(int i = 0; i < 10; i++) {
           if (meteorPos - i >= 0 && meteorPos - i < NUM_LEDS) {
             leds[meteorPos - i] = CRGB::White;
           }
         }
         FastLED.show();
-        
+
         meteorPos++;
         if (meteorPos > NUM_LEDS + 10) meteorPos = 0;
       }
       else if (currentPattern == "ประกาย") {
-        // Sparkle effect
+
         fadeToBlackBy(leds, NUM_LEDS, 10);
-        
+
         if (random8() < 50) {
           int pos = random16(NUM_LEDS);
           leds[pos] = CRGB::White;
@@ -547,27 +550,27 @@ void updateAnimation() {
       }
     }
     else if (currentMode == "ตามเพลง") {
-      // Music mode - handled by handleMusicBeat from web app
+
     }
-    
+
     lastUpdate = millis();
   }
 }
 
-//================================================================
-// LOOP FUNCTION
-//================================================================
+
+
+
 void loop() {
   if (strlen(saved_ssid) > 0) {
-    // Normal Mode Loop
+
     server.handleClient();
-    updateAnimation(); // Update LED animations
+    updateAnimation();
   } else {
-    // Provisioning Mode Loop
-    dnsServer.processNextRequest(); // <--- สำคัญมากสำหรับ Captive Portal
+
+    dnsServer.processNextRequest();
     server.handleClient();
-    
-    // Show status LED pattern in provisioning mode
+
+
     static unsigned long lastBlink = 0;
     if (millis() - lastBlink > 500) {
       fill_solid(leds, min(10, NUM_LEDS), CRGB::Cyan);
