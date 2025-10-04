@@ -117,6 +117,108 @@ void rainbowTwinkle() {
   FastLED.show();
 }
 
+// Glitter Pattern (กากเพชร)
+void glitter() {
+  fadeToBlackBy(leds, NUM_LEDS, 10);
+  if(random8() < 80) {
+    int pos = random16(NUM_LEDS);
+    leds[pos] += CRGB::White;
+  }
+  FastLED.show();
+}
+
+// Confetti Pattern (พลุกระดาษ)
+void confetti() {
+  fadeToBlackBy(leds, NUM_LEDS, 10);
+  int pos = random16(NUM_LEDS);
+  leds[pos] += CHSV(gHue + random8(64), 200, 255);
+  gHue++;
+  FastLED.show();
+}
+
+// Comet Pattern (ดาวตก)
+void comet() {
+  static int cometPos = 0;
+  static int cometDirection = 1;
+  
+  fadeToBlackBy(leds, NUM_LEDS, 64);
+  
+  // Draw comet tail
+  for(int i = 0; i < 10; i++) {
+    int tailPos = cometPos - (i * cometDirection);
+    if(tailPos >= 0 && tailPos < NUM_LEDS) {
+      leds[tailPos] = CHSV(gHue, 255, 255 - (i * 25));
+    }
+  }
+  
+  cometPos += cometDirection;
+  if(cometPos >= NUM_LEDS || cometPos < 0) {
+    cometDirection *= -1;
+    cometPos += cometDirection;
+    gHue += 32;
+  }
+  
+  FastLED.show();
+}
+
+// Scanner Pattern (สแกนเนอร์)
+void scanner() {
+  static uint8_t pos = 0;
+  static int8_t direction = 1;
+  
+  fadeToBlackBy(leds, NUM_LEDS, 20);
+  leds[pos] = CHSV(gHue, 255, 255);
+  
+  pos += direction;
+  if(pos == 0 || pos == NUM_LEDS - 1) {
+    direction *= -1;
+    gHue += 16;
+  }
+  
+  FastLED.show();
+}
+
+// Theater Chase Pattern (ไฟโรงหนัง)
+void theaterChase() {
+  static uint8_t offset = 0;
+  
+  FastLED.clear();
+  for(int i = 0; i < NUM_LEDS; i += 3) {
+    int pos = (i + offset) % NUM_LEDS;
+    leds[pos] = CHSV(gHue, 255, 255);
+  }
+  
+  offset++;
+  if(offset >= 3) {
+    offset = 0;
+    gHue += 8;
+  }
+  
+  FastLED.show();
+}
+
+// Breathe Pattern (ลมหายใจ)
+void breathe() {
+  static uint8_t breatheValue = 0;
+  static int8_t breatheDirection = 1;
+  
+  breatheValue += breatheDirection;
+  if(breatheValue == 255 || breatheValue == 0) {
+    breatheDirection *= -1;
+  }
+  
+  uint8_t brightness = ease8InOutQuad(breatheValue);
+  fill_solid(leds, NUM_LEDS, CHSV(gHue, 255, brightness));
+  FastLED.show();
+}
+
+// Pulse Pattern (ชีพจร)
+void pulse() {
+  uint8_t beat = beatsin8(60, 50, 255); // 60 BPM
+  fill_solid(leds, NUM_LEDS, CHSV(gHue, 255, beat));
+  FastLED.show();
+}
+
 // Fire Pattern
 void fireEffect() {
   static byte heat[NUM_LEDS];
@@ -697,9 +799,16 @@ void setup() {
       <h3>✨ เอฟเฟกต์</h3>
       <button onclick="setPattern('รุ้งวนลูป')">🌈 รุ้งวนลูป</button>
       <button onclick="setPattern('รุ้งวิ่งไล่')">🏃 รุ้งวิ่งไล่</button>
+      <button onclick="setPattern('รุ้งระยิบ')">✨ รุ้งระยิบ</button>
+      <button onclick="setPattern('กากเพชร')">💎 กากเพชร</button>
+      <button onclick="setPattern('พลุกระดาษ')">🎊 พลุกระดาษ</button>
+      <button onclick="setPattern('ดาวตก')">☄️ ดาวตก</button>
+      <button onclick="setPattern('สแกนเนอร์')">📡 สแกนเนอร์</button>
+      <button onclick="setPattern('ไฟโรงหนัง')">🎬 ไฟโรงหนัง</button>
+      <button onclick="setPattern('ลมหายใจ')">🌬️ ลมหายใจ</button>
+      <button onclick="setPattern('ชีพจร')">💓 ชีพจร</button>
       <button onclick="setPattern('เปลวไฟ')">🔥 เปลวไฟ</button>
       <button onclick="setPattern('คลื่นทะเล')">🌊 คลื่นทะเล</button>
-      <button onclick="setPattern('ประกาย')">⭐ ประกาย</button>
     </div>
     
     <div class="card">
@@ -898,7 +1007,7 @@ void updateAnimation() {
       paletteStrobe();
     }
     else if (currentMode == "เอฟเฟกต์") {
-      // Effects mode - run pattern
+      // Effects mode - run pattern (ตรงตาม types.ts ใน Web App)
       if (currentPattern == "รุ้งวนลูป") {
         rainbowCycle();
       }
@@ -908,78 +1017,32 @@ void updateAnimation() {
       else if (currentPattern == "รุ้งระยิบ") {
         rainbowTwinkle();
       }
+      else if (currentPattern == "กากเพชร") {
+        glitter();
+      }
+      else if (currentPattern == "พลุกระดาษ") {
+        confetti();
+      }
+      else if (currentPattern == "ดาวตก") {
+        comet();
+      }
+      else if (currentPattern == "สแกนเนอร์") {
+        scanner();
+      }
+      else if (currentPattern == "ไฟโรงหนัง") {
+        theaterChase();
+      }
+      else if (currentPattern == "ลมหายใจ") {
+        breathe();
+      }
+      else if (currentPattern == "ชีพจร") {
+        pulse();
+      }
       else if (currentPattern == "เปลวไฟ") {
         fireEffect();
       }
       else if (currentPattern == "คลื่นทะเล") {
         oceanWave();
-      }
-      else if (currentPattern == "ป่าไม้") {
-        // Forest effect (green tones)
-        static uint8_t pos = 0;
-        for(int i = 0; i < NUM_LEDS; i++) {
-          leds[i] = CHSV(96 + sin8(i * 10 + pos), 255, 255);
-        }
-        FastLED.show();
-        pos++;
-      }
-      else if (currentPattern == "พระอาทิตย์ตก") {
-        // Sunset effect
-        for(int i = 0; i < NUM_LEDS; i++) {
-          int hue = map(i, 0, NUM_LEDS, 0, 32); // Red to Orange
-          leds[i] = CHSV(hue, 255, 255);
-        }
-        FastLED.show();
-      }
-      else if (currentPattern == "แสงเหนือ") {
-        // Aurora effect
-        static uint8_t pos = 0;
-        for(int i = 0; i < NUM_LEDS; i++) {
-          leds[i] = CHSV((128 + sin8(i * 5 + pos)) % 255, 200, 200);
-        }
-        FastLED.show();
-        pos += 2;
-      }
-      else if (currentPattern == "ลูกกวาด") {
-        // Candy effect (pink and white)
-        for(int i = 0; i < NUM_LEDS; i++) {
-          if ((i + gHue) % 10 < 5) {
-            leds[i] = CRGB::HotPink;
-          } else {
-            leds[i] = CRGB::White;
-          }
-        }
-        FastLED.show();
-        gHue++;
-      }
-      else if (currentPattern == "ลาวา") {
-        // Lava effect (red and orange)
-        fireEffect(); // Reuse fire effect
-      }
-      else if (currentPattern == "ดาวตก") {
-        // Meteor effect
-        static int meteorPos = 0;
-        fadeToBlackBy(leds, NUM_LEDS, 64);
-        
-        for(int i = 0; i < 10; i++) {
-          if (meteorPos - i >= 0 && meteorPos - i < NUM_LEDS) {
-            leds[meteorPos - i] = CRGB::White;
-          }
-        }
-        FastLED.show();
-        
-        meteorPos++;
-        if (meteorPos > NUM_LEDS + 10) meteorPos = 0;
-      }
-      else if (currentPattern == "ประกาย") {
-        // Sparkle effect
-        fadeToBlackBy(leds, NUM_LEDS, 10);
-        
-        if (random8() < 50) {
-          int pos = random16(NUM_LEDS);
-          leds[pos] = CRGB::White;
-        }
-        FastLED.show();
       }
     }
     else if (currentMode == "ตามเพลง") {
