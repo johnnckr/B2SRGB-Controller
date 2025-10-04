@@ -1,0 +1,18 @@
+{
+  "short_name": "B2SRGB",
+  "name": "B2SRGB Controller",
+  "description": "A web-based mobile application to control an ESP32-powered RGB LED strip. Features music synchronization, multiple lighting modes, and fine-tuned adjustments for color, brightness, and speed.",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0891b2",
+  "background_color": "#111827"
+}

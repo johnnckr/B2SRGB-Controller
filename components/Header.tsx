@@ -20,7 +20,7 @@ const Header: React.FC<HeaderProps> = ({ isConnected, onStatusClick }) => {
           {isConnected ? 'เชื่อมต่อแล้ว' : 'ไม่ได้เชื่อมต่อ'}
         </span>
         <div
-          className={`w-3 h-3 rounded-full transition-colors ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}
+          className={`w-3 h-3 rounded-full transition-colors ${isConnected ? 'bg-green-500 animate-soft-pulse' : 'bg-red-500'}`}
         ></div>
       </button>
     </header>

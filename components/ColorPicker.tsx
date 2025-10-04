@@ -169,7 +169,7 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 const BrightnessIcon: React.FC<{className?: string}> = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
     </svg>
 );
@@ -181,6 +181,11 @@ interface ColorPickerProps {
 
 const ColorPicker: React.FC<ColorPickerProps> = ({ color, onColorChange }) => {
   const { h, s, l } = hexToHsl(color);
+  const [inputValue, setInputValue] = useState(color);
+
+  useEffect(() => {
+    setInputValue(color);
+  }, [color]);
 
   const handleHsChange = (newHue: number, newSaturation: number) => {
     const newHex = hslToHex(newHue, newSaturation, l);
@@ -192,6 +197,27 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onColorChange }) => {
     onColorChange(newHex);
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let text = e.target.value;
+    // Ensure it starts with '#' and only contains valid hex characters.
+    if (!text.startsWith('#')) {
+      text = '#' + text;
+    }
+    text = '#' + text.substring(1).replace(/[^0-9a-fA-F]/g, '');
+    
+    // Limit length to 7 characters (e.g., #RRGGBB).
+    if (text.length > 7) {
+      return;
+    }
+
+    setInputValue(text);
+
+    // If it's a valid, complete hex code, update the parent state.
+    if (/^#([0-9a-fA-F]{3}){1,2}$/i.test(text)) {
+      onColorChange(text.toUpperCase());
+    }
+  };
+
   return (
     <div className="w-full flex flex-col items-center space-y-6">
         <HueSaturationWheel 
@@ -201,6 +227,20 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ color, onColorChange }) => {
             l={l} 
             onHsChange={handleHsChange} 
         />
+        <div className="w-full max-w-xs px-4">
+            <label htmlFor="hexInput" className="block text-sm text-center text-gray-400 mb-2 font-medium">
+                Hex Code
+            </label>
+            <input
+                id="hexInput"
+                type="text"
+                value={inputValue}
+                onChange={handleInputChange}
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 text-center text-white font-mono tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all"
+                aria-label="Hex color code"
+                spellCheck="false"
+            />
+        </div>
         <div className="w-full max-w-xs px-4">
             <Slider 
                 label="ความสว่าง"

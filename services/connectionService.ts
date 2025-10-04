@@ -12,6 +12,9 @@ import { LightMode, Pattern, ConnectionType, ConnectionService as IConnectionSer
 const BLE_SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
 const BLE_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 
+// Default IP for the ESP32 when in Access Point (AP) mode for provisioning.
+const PROVISIONING_IP = '192.168.4.1';
+
 class ConnectionServiceManager implements IConnectionService {
     public connectionType: ConnectionType = ConnectionType.None;
     public isConnected: boolean = false;
@@ -24,6 +27,28 @@ class ConnectionServiceManager implements IConnectionService {
         this.isConnected = status;
         // Optional: Dispatch a global event for connection status changes
         // window.dispatchEvent(new CustomEvent('connectionchange', { detail: { isConnected: status } }));
+    }
+
+    async provisionWifi(ssid: string, pass: string): Promise<boolean> {
+        console.log(`[Provisioning] Sending credentials for SSID: ${ssid} to ${PROVISIONING_IP}`);
+        try {
+            const response = await fetch(`http://${PROVISIONING_IP}/save-wifi`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ ssid, pass }),
+            });
+            if (response.ok) {
+                console.log('[Provisioning] Credentials sent successfully.');
+                return true;
+            }
+            console.error('[Provisioning] Failed to send credentials, server responded with:', response.status);
+            return false;
+        } catch (error) {
+            console.error('[Provisioning] Error sending credentials:', error);
+            return false;
+        }
     }
 
     async connectWifi(ip: string): Promise<boolean> {

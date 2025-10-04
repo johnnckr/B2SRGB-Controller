@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { LightMode, Pattern } from './types';
 import Header from './components/Header';
@@ -11,6 +12,8 @@ import ColorPicker from './components/ColorPicker';
 import MusicMode from './components/MusicMode';
 import ConnectionModal from './components/ConnectionModal';
 import { connectionService } from './services/connectionService';
+import AutoBrightnessSlider from './components/AutoBrightnessSlider';
+import { useAmbientLightSensor } from './hooks/useAmbientLightSensor';
 
 const SunIcon: React.FC<{className?: string}> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -26,6 +29,14 @@ const FastForwardIcon: React.FC<{className?: string}> = ({ className }) => (
 
 const defaultPalette = ['#ff0000', '#ff8000', '#ffff00', '#00ff00', '#0000ff'];
 
+const patternPresets: Record<string, string[]> = {
+  [Pattern.Fire]: ['#FF4500', '#FFA500', '#FFD700', '#FF6347', '#DC143C'], // Oranges, Reds, Yellows
+  [Pattern.Ocean]: ['#00008B', '#00BFFF', '#40E0D0', '#E0FFFF', '#1E90FF'], // Blues, Turquoises, Whites
+  [Pattern.RainbowCycle]: defaultPalette,
+  [Pattern.RainbowChase]: defaultPalette,
+  [Pattern.RainbowTwinkle]: defaultPalette,
+};
+
 const App: React.FC = () => {
   const [isConnected, setIsConnected] = useState(connectionService.isConnected);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,6 +46,7 @@ const App: React.FC = () => {
   const [color, setColor] = useState('#ff00ff');
   const [palette, setPalette] = useState<string[]>(defaultPalette);
   const [brightness, setBrightness] = useState(80);
+  const [isAutoBrightness, setIsAutoBrightness] = useState(false);
   const [speed, setSpeed] = useState(50);
 
   const handleConnectionChange = (status: boolean) => {
@@ -43,6 +55,30 @@ const App: React.FC = () => {
       setIsModalOpen(false); // Close modal on successful connection
     }
   };
+  
+  const handleBrightnessChange = useCallback((newBrightness: number) => {
+    setBrightness(newBrightness);
+    if(powerOn) connectionService.setBrightness(newBrightness);
+  }, [powerOn]);
+
+  const handleAutoBrightnessUpdate = useCallback((illuminance: number) => {
+    // Map illuminance (lux) to brightness (0-100).
+    // This is a simple linear mapping, clamped to a reasonable range.
+    // e.g., map lux 0-500 to brightness 10-100.
+    const minLux = 0, maxLux = 500;
+    const minBrightness = 10, maxBrightness = 100;
+
+    const clampedLux = Math.min(Math.max(illuminance, minLux), maxLux);
+    const newBrightness = minBrightness + ((clampedLux - minLux) / (maxLux - minLux)) * (maxBrightness - minBrightness);
+    
+    handleBrightnessChange(Math.round(newBrightness));
+  }, [handleBrightnessChange]);
+
+  useAmbientLightSensor({ 
+    enabled: isAutoBrightness, 
+    onReading: handleAutoBrightnessUpdate 
+  });
+
 
   const handlePowerToggle = useCallback(() => {
     if (!isConnected) return;
@@ -73,14 +109,17 @@ const App: React.FC = () => {
     if (powerOn) connectionService.setPalette(defaultPalette);
   }, [powerOn]);
 
+  const handleApplyPreset = useCallback(() => {
+    const presetPalette = patternPresets[pattern];
+    if (presetPalette) {
+      setPalette(presetPalette);
+      if (powerOn) connectionService.setPalette(presetPalette);
+    }
+  }, [pattern, powerOn]);
+
   const handleColorChange = useCallback((newColor: string) => {
     setColor(newColor);
     if(powerOn) connectionService.setColor(newColor);
-  }, [powerOn]);
-
-  const handleBrightnessChange = useCallback((newBrightness: number) => {
-    setBrightness(newBrightness);
-    if(powerOn) connectionService.setBrightness(newBrightness);
   }, [powerOn]);
 
   const handleSpeedChange = useCallback((newSpeed: number) => {
@@ -102,7 +141,12 @@ const App: React.FC = () => {
           
           {mode === LightMode.Effects && (
             <>
-              <PatternSelector currentPattern={pattern} onPatternChange={handlePatternChange} />
+              <PatternSelector 
+                currentPattern={pattern} 
+                onPatternChange={handlePatternChange}
+                onApplyPreset={handleApplyPreset}
+                hasPreset={!!patternPresets[pattern]}
+              />
               <ColorPalettePicker 
                 palette={palette} 
                 onColorChange={handlePaletteChange}
@@ -117,7 +161,14 @@ const App: React.FC = () => {
 
           {mode === LightMode.Music && <MusicMode />}
 
-          {mode !== LightMode.Music && <Slider label="ความสว่าง" value={brightness} onChange={handleBrightnessChange} icon={<SunIcon className="w-5 h-5" />} />}
+          {mode !== LightMode.Music && <AutoBrightnessSlider 
+              label="ความสว่าง" 
+              value={brightness} 
+              onChange={handleBrightnessChange} 
+              isAuto={isAutoBrightness}
+              onAutoToggle={setIsAutoBrightness}
+              icon={<SunIcon className="w-5 h-5" />} 
+          />}
         </div>
       </div>
     );

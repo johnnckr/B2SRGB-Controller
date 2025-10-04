@@ -7,7 +7,7 @@ interface ConnectionModalProps {
   onConnectionChange: (isConnected: boolean) => void;
 }
 
-type View = 'initial' | 'wifi' | 'bluetooth' | 'success';
+type View = 'initial' | 'connect' | 'provision' | 'bluetooth' | 'success' | 'provision_success';
 
 // --- SVG Icons for internal use ---
 const WifiIcon: React.FC<{className?: string}> = ({ className }) => (
@@ -42,6 +42,8 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
   const [view, setView] = useState<View>('initial');
   const [status, setStatus] = useState<'idle' | 'connecting' | 'error'>('idle');
   const [ipAddress, setIpAddress] = useState('192.168.1.100');
+  const [ssid, setSsid] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -56,13 +58,15 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
   }, [isOpen]);
 
   useEffect(() => {
-    // FIX: Replaced NodeJS.Timeout with ReturnType<typeof setTimeout> for browser compatibility.
     let timer: ReturnType<typeof setTimeout>;
     if (view === 'success') {
       timer = setTimeout(() => {
         onConnectionChange(true);
-        // onClose will trigger the state reset from the other useEffect
       }, 1500);
+    } else if (view === 'provision_success') {
+      timer = setTimeout(() => {
+        onClose(); // Close modal, user needs to reconnect wifi
+      }, 4000);
     }
     return () => clearTimeout(timer);
   }, [view, onConnectionChange, onClose]);
@@ -84,6 +88,22 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
       setErrorMessage('ไม่สามารถเชื่อมต่อผ่าน Wi-Fi ได้');
     }
   };
+  
+  const handleProvision = async () => {
+    if (!ssid) {
+        setErrorMessage('กรุณาใส่ชื่อ Wi-Fi');
+        return;
+    }
+    setStatus('connecting');
+    setErrorMessage('');
+    const success = await connectionService.provisionWifi(ssid, password);
+    if (success) {
+        setView('provision_success');
+    } else {
+        setStatus('error');
+        setErrorMessage('ตั้งค่าไม่สำเร็จ กรุณาตรวจสอบว่าเชื่อมต่อกับ Wi-Fi ของอุปกรณ์แล้ว');
+    }
+  };
 
   const handleBluetoothConnect = async () => {
     setStatus('connecting');
@@ -98,6 +118,18 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
     }
   };
   
+  const getTitle = () => {
+    switch(view) {
+        case 'initial': return 'เลือกวิธีการเชื่อมต่อ';
+        case 'connect': return 'เชื่อมต่ออุปกรณ์';
+        case 'provision': return 'ตั้งค่าอุปกรณ์ใหม่';
+        case 'bluetooth': return 'เชื่อมต่อผ่าน Bluetooth';
+        case 'success': return 'เชื่อมต่อสำเร็จ!';
+        case 'provision_success': return 'ตั้งค่าสำเร็จ!';
+        default: return 'เชื่อมต่อ';
+    }
+  };
+
   const renderContent = () => {
     switch (view) {
       case 'success':
@@ -106,14 +138,20 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
                 <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center">
                     <CheckIcon className="w-10 h-10 text-green-400" />
                 </div>
-                <h3 className="text-xl font-bold text-green-400">เชื่อมต่อสำเร็จ!</h3>
             </div>
         );
-
-      case 'wifi':
+      case 'provision_success':
+        return (
+            <div className="flex flex-col items-center justify-center space-y-4 text-center h-48">
+                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center">
+                    <CheckIcon className="w-10 h-10 text-green-400" />
+                </div>
+                <p className="text-gray-300">อุปกรณ์จะรีสตาร์ทและเชื่อมต่อ Wi-Fi ของคุณ กรุณาเชื่อมต่อมือถือกับ Wi-Fi บ้านของคุณเพื่อใช้งานต่อ</p>
+            </div>
+        );
+      case 'connect':
         return (
           <div className="flex flex-col space-y-4">
-            <h3 className="text-xl font-semibold text-center">เชื่อมต่อผ่าน Wi-Fi</h3>
             <p className="text-sm text-gray-400 text-center">กรอก IP Address ของ ESP32 ของคุณ</p>
             <input
               type="text"
@@ -132,11 +170,40 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
             </button>
           </div>
         );
+      
+      case 'provision':
+        return (
+            <div className="flex flex-col space-y-4">
+                <p className="text-sm text-gray-400 text-center">เชื่อมต่อมือถือกับ Wi-Fi ของอุปกรณ์ (ชื่อ B2SRGB_Setup) แล้วกรอกข้อมูล Wi-Fi บ้านของคุณที่นี่</p>
+                <input
+                    type="text"
+                    value={ssid}
+                    onChange={(e) => setSsid(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all"
+                    placeholder="ชื่อ Wi-Fi (SSID)"
+                    disabled={status === 'connecting'}
+                />
+                <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all"
+                    placeholder="รหัสผ่าน (ถ้ามี)"
+                    disabled={status === 'connecting'}
+                />
+                <button
+                    onClick={handleProvision}
+                    disabled={status === 'connecting'}
+                    className="w-full h-12 flex items-center justify-center bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-500 disabled:bg-gray-600 transition-colors"
+                >
+                    {status === 'connecting' ? <SpinnerIcon className="w-6 h-6"/> : 'บันทึกและเชื่อมต่อ'}
+                </button>
+            </div>
+        );
 
       case 'bluetooth':
         return (
           <div className="flex flex-col items-center space-y-4">
-            <h3 className="text-xl font-semibold text-center">เชื่อมต่อผ่าน Bluetooth</h3>
             <p className="text-sm text-gray-400 text-center px-4">
               เบราว์เซอร์จะแสดงหน้าต่าง ให้เลือกอุปกรณ์ชื่อ <strong className="text-cyan-400">'B2SRGB'</strong>
             </p>
@@ -153,18 +220,32 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
       case 'initial':
       default:
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button onClick={() => setView('wifi')} className="group p-6 bg-gray-700/50 rounded-xl border border-gray-600 hover:border-cyan-500 hover:bg-gray-700 transition-all space-y-3 text-center focus:outline-none focus:ring-2 focus:ring-cyan-400">
-                <WifiIcon className="w-10 h-10 mx-auto text-cyan-400" />
-                <h3 className="font-semibold text-white">Wi-Fi</h3>
-                <p className="text-xs text-gray-400">เชื่อมต่อผ่านเครือข่ายเดียวกัน</p>
-            </button>
-             <button onClick={() => setView('bluetooth')} className="group p-6 bg-gray-700/50 rounded-xl border border-gray-600 hover:border-blue-500 hover:bg-gray-700 transition-all space-y-3 text-center focus:outline-none focus:ring-2 focus:ring-blue-400">
-                <BluetoothIcon className="w-10 h-10 mx-auto text-blue-400" />
-                <h3 className="font-semibold text-white">Bluetooth</h3>
-                <p className="text-xs text-gray-400">เชื่อมต่อโดยตรงกับอุปกรณ์</p>
-            </button>
-          </div>
+            <div className="flex flex-col space-y-6">
+                <div className="space-y-3 text-center">
+                    <h3 className="font-semibold text-white">สำหรับครั้งแรก หรือเปลี่ยน Wi-Fi</h3>
+                    <button onClick={() => setView('provision')} className="w-full p-4 bg-cyan-700 rounded-lg text-white font-bold hover:bg-cyan-600 transition-colors">
+                        ตั้งค่าอุปกรณ์ใหม่
+                    </button>
+                </div>
+                <div className="relative flex items-center">
+                    <div className="flex-grow border-t border-gray-600"></div>
+                    <span className="flex-shrink mx-4 text-gray-400 text-sm">หรือ</span>
+                    <div className="flex-grow border-t border-gray-600"></div>
+                </div>
+                <div className="space-y-3 text-center">
+                     <h3 className="font-semibold text-white">สำหรับใช้งานปกติ</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <button onClick={() => setView('connect')} className="group p-4 bg-gray-700/50 rounded-lg border border-gray-600 hover:border-cyan-500 hover:bg-gray-700 transition-all space-y-2 text-center focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                            <WifiIcon className="w-8 h-8 mx-auto text-cyan-400" />
+                            <span className="text-sm text-white">Wi-Fi</span>
+                        </button>
+                        <button onClick={() => setView('bluetooth')} className="group p-4 bg-gray-700/50 rounded-lg border border-gray-600 hover:border-blue-500 hover:bg-gray-700 transition-all space-y-2 text-center focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <BluetoothIcon className="w-8 h-8 mx-auto text-blue-400" />
+                            <span className="text-sm text-white">Bluetooth</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         );
     }
   };
@@ -181,14 +262,14 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
-          {view !== 'initial' && view !== 'success' ? (
+          {view !== 'initial' && view !== 'success' && view !== 'provision_success' ? (
             <button onClick={() => { setView('initial'); setStatus('idle'); setErrorMessage(''); }} className="text-gray-400 hover:text-white p-2 rounded-full -ml-2">
                 <BackArrowIcon className="w-6 h-6" />
             </button>
           ) : <div className="w-10 h-10"></div>}
           
           <h2 className="text-xl font-bold text-white text-center absolute left-1/2 -translate-x-1/2">
-            {view === 'success' ? '' : 'เชื่อมต่ออุปกรณ์'}
+            {getTitle()}
           </h2>
 
           <button onClick={handleClose} className="text-3xl text-gray-500 hover:text-white leading-none p-2 rounded-full -mr-2">&times;</button>

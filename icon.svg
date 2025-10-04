@@ -1,0 +1,9 @@
+<svg width="512" height="512" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="B2SRGB App Icon">
+  <title>B2SRGB App Icon</title>
+  <rect width="200" height="200" fill="#111827"/>
+  <g style="mix-blend-mode: screen;" aria-hidden="true">
+    <circle cx="100" cy="80" r="50" fill="#ff0000"/>
+    <circle cx="80" cy="120" r="50" fill="#00ff00"/>
+    <circle cx="120" cy="120" r="50" fill="#0000ff"/>
+  </g>
+</svg>
